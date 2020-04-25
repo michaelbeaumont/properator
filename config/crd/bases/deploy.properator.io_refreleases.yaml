@@ -1,0 +1,81 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.2.5
+  creationTimestamp: null
+  name: refreleases.deploy.properator.io
+spec:
+  group: deploy.properator.io
+  names:
+    kind: RefRelease
+    listKind: RefReleaseList
+    plural: refreleases
+    singular: refrelease
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RefRelease is the Schema for the refreleases API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RefReleaseSpec defines the desired state of RefRelease
+            properties:
+              githubStatus:
+                description: GithubStatus refers to the GithubStatus of the release
+                properties:
+                  deployment:
+                    description: Deployment refers to the github deployment tracking
+                      the refRelease
+                    format: int64
+                    type: integer
+                type: object
+              ref:
+                description: Repo refers to either a branch, tag or commit along with
+                  a pull request number
+                properties:
+                  branch:
+                    type: string
+                  pullRequest:
+                    type: integer
+                  sha:
+                    type: string
+                  tag:
+                    type: string
+                type: object
+              repo:
+                description: Repo refers to a github repository
+                properties:
+                  name:
+                    type: string
+                  owner:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: RefReleaseStatus defines the observed state of RefRelease
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
