@@ -1,0 +1,44 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-webhook
+  namespace: system
+  labels:
+    control-plane: github-webhook
+spec:
+  selector:
+    matchLabels:
+      control-plane: github-webhook
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: github-webhook
+    spec:
+      containers:
+      - image: github-webhook:latest
+        imagePullPolicy: Never
+        name: github-webhook
+        ports:
+          - name: http
+            containerPort: 8080
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-secrets
+              key: GITHUB_TOKEN
+        - name: GITHUB_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: github-secrets
+              key: GITHUB_WEBHOOK_SECRET
+      terminationGracePeriodSeconds: 10
