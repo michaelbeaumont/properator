@@ -1,0 +1,24 @@
+# permissions for end users to edit refreleases.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: refrelease-editor-role
+rules:
+- apiGroups:
+  - deploy.properator.io
+  resources:
+  - refreleases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - deploy.properator.io
+  resources:
+  - refreleases/status
+  verbs:
+  - get

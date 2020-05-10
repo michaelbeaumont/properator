@@ -22,3 +22,7 @@ zz_generated.*
 *.swp
 *.swo
 *~
+
+.env
+
+node_modules

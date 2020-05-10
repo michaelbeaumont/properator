@@ -1,0 +1,20 @@
+# permissions for end users to view refreleases.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: refrelease-viewer-role
+rules:
+- apiGroups:
+  - deploy.properator.io
+  resources:
+  - refreleases
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - deploy.properator.io
+  resources:
+  - refreleases/status
+  verbs:
+  - get
