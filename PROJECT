@@ -1,0 +1,7 @@
+domain: properator.io
+repo: github.com/michaelbeaumont/properator
+resources:
+- group: deploy
+  kind: RefRelease
+  version: v1alpha1
+version: "2"
