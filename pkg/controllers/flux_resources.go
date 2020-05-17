@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strconv"
 
 	"github.com/go-logr/logr"
@@ -18,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	deployv1alpha1 "github.com/michaelbeaumont/properator/api/v1alpha1"
+	"github.com/michaelbeaumont/properator/pkg/utils"
 )
 
 // Flux holds all k8s resources needed for flux
@@ -49,26 +49,10 @@ func (f *Flux) GiveOwnership(owner metav1.Object, scheme *runtime.Scheme) error 
 	return nil
 }
 
-func createOrReplace(ctx context.Context, r client.Reader, c client.Client, obj runtime.Object) error {
-	ns, _ := client.ObjectKeyFromObject(obj)
-	// Hacky hacky but I don't want to DeepCopy `obj`
-	// and passing nil doesn't supply `Get` with the type
-	ignored := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(runtime.Object)
-	if err := r.Get(ctx, ns, ignored); err != nil {
-		if err := c.Create(ctx, obj); err != nil {
-			return err
-		}
-	} else if err := c.Update(ctx, obj); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // Deploy deploys this Flux instance to the cluster
 func (f *Flux) Deploy(ctx context.Context, log logr.Logger, c client.Client, r client.Reader) error {
 	for _, obj := range f.toObjectList() {
-		if err := createOrReplace(ctx, r, c, obj); err != nil {
+		if err := utils.CreateOrReplace(ctx, r, c, obj); err != nil {
 			return err
 		}
 	}

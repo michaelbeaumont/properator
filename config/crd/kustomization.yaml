@@ -1,5 +1,6 @@
 resources:
 - bases/deploy.properator.io_refreleases.yaml
+- bases/deploy.properator.io_githubdeployments.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

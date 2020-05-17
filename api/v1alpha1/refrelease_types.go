@@ -29,18 +29,13 @@ type RefReleaseSpec struct {
 	// Repo refers to either a branch, tag or commit along with a pull request
 	// number
 	Ref Ref `json:"ref,omitempty"`
-	// GithubStatus refers to the GithubStatus of the release
-	GithubStatus GithubStatus `json:"githubStatus,omitempty"`
-}
-
-// GithubStatus defines the github specific state of RefRelease
-type GithubStatus struct {
-	// Deployment refers to the github deployment tracking the refRelease
-	Deployment int64 `json:"deployment,omitempty"`
 }
 
 // RefReleaseStatus defines the observed state of RefRelease
-type RefReleaseStatus struct{}
+type RefReleaseStatus struct {
+	// Deployment status determines the deployment URL
+	DeploymentURL string `json:"deploymentURL,omitempty"`
+}
 
 // +kubebuilder:object:root=true
 
