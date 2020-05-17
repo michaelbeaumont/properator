@@ -19,8 +19,44 @@ When the PR is closed, that instance of Flux and the launched manifests will dis
 
 ![Drop](docs/closed.png)
 
-Coming: Deployments including URLs to the endpoint(s) belonging to your
-application.
+### URL annotations
+
+Include annotations like the following on an `Ingress` resource:
+
+```
+metadata:
+  annotations:
+    deploy.properator.io/deployment: github-webhook # This should always be `github-webhook`
+    deploy.properator.io/url: https://2.pr.app.test # This should point to your deployment
+```
+
+to have the GH deployment point to `https://2.pr.app.test`.
+
+#### Generation
+
+Note: `properator` gives you access to the PR number
+when manifests are generated on the file system at `/etc/properator`.
+
+As a primitive example, this means you can have a `.flux.yaml` like:
+
+```
+.flux.yaml
+---
+version: 1
+patchUpdated:
+  generators:
+  - command: sed -e "s/\${PR}/$(cat /etc/properator/pr)/g" ingress.yaml
+
+ingress.yaml
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: my-app
+  annotations:
+    deploy.properator.io/deployment: github-webhook
+    deploy.properator.io/url: http://${PR}.pr.app.test
+```
 
 ## Setup
 
@@ -31,6 +67,7 @@ We're assuming `minikube` running locally.
 Setup a deploy key in your cluster that will be shared by `flux` instances to access the repository.
 
 ```
+kubectl create ns properator-system
 kubectl create secret generic -n properator-system flux-git-deploy --from-file=identity
 ```
 
@@ -40,9 +77,10 @@ be added as a deploy key in Github for each repo setup with `properator`.
 ### Github credentials
 
 The controller needs:
-* a token giving access to a github user account.
-* to listen to github webhook events and forward them to the
-`properator-system/github-controller-manager` service.
+
+- a token giving access to a github user account.
+- to listen to github webhook events and forward them to the
+  `properator-system/github-controller-manager` service.
   Make note of the webhook secret.
 
 For testing, you can use `make listen-webhook` to use `smee.io` to proxy events
@@ -74,21 +112,11 @@ make deploy
 ## TODO
 
 1. Add configuration to repositories
-    * `--git-path` for `flux`
-1. Should `refrelease` be cluster-scoped?
-1. Link the deployed manifests to a URL for the deployment.
-    * Add a configuration setting that gives `properator` a URL for a PR number
-      (e.g. `https://preview-repo-{{ .PR }}.domain.com`)
-    * Needs to be reflected by an `Ingress` in the deployed manifests, for
-      example
-1. Better deployment status flow would be
-    1. create flux
-    1. flux deploys manifests
-    1. set GH deployment successful
-    * whereas right now it's
-        1. create flux
-        1. set GH deployment successful
-        1. flux deploys manifest
-    * Maybe have image for use in k8s `Job` which sets the deployment as active if
-      an ingress is _really_ responsive?
+   - `--git-path` for `flux`
+1. How to measure "successful" deployment
+   Right now it's just whether an `Ingress` resource appears with a link to the
+   deployment.
+   - If we're not using `Ingress`?
+   - Maybe have image for use in k8s `Job` which sets the deployment as active if
+     an ingress is _really_ responsive?
 1. Make deployment to cluster easier, github apps

@@ -3,7 +3,7 @@ package github
 import (
 	"fmt"
 	"net/http"
-	"strings"
+	"regexp"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -84,6 +84,12 @@ func (webhook *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func containsCommand(name, command, body string) bool {
+	pat := fmt.Sprintf("@%s[[:space:]]+%s", name, command)
+	matched, _ := regexp.MatchString(pat, body)
+	return matched
+}
+
 func parseComment(username string, comment *gh.IssueCommentEvent) action {
 	if !comment.Issue.IsPullRequest() {
 		return nil
@@ -94,14 +100,14 @@ func parseComment(username string, comment *gh.IssueCommentEvent) action {
 	}
 	body := comment.Comment.GetBody()
 
-	if strings.Contains(body, fmt.Sprintf("@%s deploy", username)) {
+	if containsCommand(username, "deploy", body) {
 		return &create{
 			owner: comment.GetRepo().GetOwner().GetLogin(),
 			name:  comment.GetRepo().GetName(),
 			pr:    pr,
 		}
 	}
-	if strings.Contains(body, fmt.Sprintf("@%s drop", username)) {
+	if containsCommand(username, "drop", body) {
 		return &drop{
 			pr: pr,
 		}

@@ -12,6 +12,11 @@ var (
 	name  = "test"
 )
 
+func TestContainsCommand(t *testing.T) {
+	assert.True(t, containsCommand("name", "deploy", "@name    deploy"))
+	assert.False(t, containsCommand("name", "deploy", "@name  f  deploy"))
+}
+
 func TestParseComment(t *testing.T) {
 	num := 23
 	id := int64(12345)
