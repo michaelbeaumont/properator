@@ -12,11 +12,10 @@ import (
 	deployv1alpha1 "github.com/michaelbeaumont/properator/api/v1alpha1"
 )
 
-// +kubebuilder:rbac:groups=deploy.properator.io,resources=refreleases,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=deploy.properator.io,resources=refreleases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=deploy.properator.io,resources=githubdeployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch
 
-// IngressReconciler reconciles a RefRelease object
+// IngressReconciler reconciles an Ingress object
 // GitKey should be base64 encoded
 type IngressReconciler struct {
 	client.Client
@@ -35,8 +34,10 @@ func (ir *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	deploymentName, ok := ingress.Annotations["deploy.properator.io/deployment"]
-	if !ok {
+	deploymentName, okDep := ingress.Annotations["deploy.properator.io/deployment"]
+	deploymentSha, okSha := ingress.Annotations["deploy.properator.io/sha"]
+
+	if !okDep || !okSha {
 		return ctrl.Result{}, nil
 	}
 
@@ -51,14 +52,21 @@ func (ir *IngressReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	gd.Spec.Status = deployv1alpha1.DeploymentStatus{
+	status := deployv1alpha1.DeploymentShaStatus{
 		State: "success",
 	}
 	URL, ok := ingress.Annotations["deploy.properator.io/url"]
 
 	if ok {
-		gd.Spec.Status.URL = URL
+		status.URL = URL
 	}
+
+	if gd.Spec.Statuses == nil {
+		gd.Spec.Statuses = make(map[string]deployv1alpha1.DeploymentShaStatus)
+	}
+
+	gd.Spec.Statuses[deploymentSha] = status
+	gd.Spec.Sha = deploymentSha
 
 	if err := ir.Update(ctx, &gd); err != nil {
 		return ctrl.Result{}, err

@@ -25,6 +25,14 @@ rules:
   - get
   - update
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - deploy.properator.io
   resources:
   - githubdeployments

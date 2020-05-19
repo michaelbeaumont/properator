@@ -6,8 +6,10 @@ import (
 
 // Deployment tells us about our deployment
 type Deployment struct {
-	// status
-	Status DeploymentStatus `json:"status,omitempty"`
+	// Stasuses collected so far
+	Statuses map[string]DeploymentShaStatus `json:"statuses,omitempty"`
+	// Current Sha
+	Sha string `json:"sha,omitempty"`
 	// Owner
 	Owner string `json:"owner,omitempty"`
 	// Name
@@ -18,12 +20,20 @@ type Deployment struct {
 	ID int64 `json:"id,omitempty"`
 }
 
-// DeploymentStatus tells us about our deployment
-type DeploymentStatus struct {
+// DeploymentShaStatus tells us about a deployment for some Sha
+type DeploymentShaStatus struct {
 	// URL determines the deployment URL
 	URL string `json:"url,omitempty"`
 	// State determines the deployment state
-	State string `json:"status,omitempty"`
+	State string `json:"state,omitempty"`
+}
+
+// DeploymentStatus tells us about the state of our github deployment
+type DeploymentStatus struct {
+	// Sha determines the current deployment Sha
+	Sha string `json:"sha,omitempty"`
+	// Status determines the deployment state
+	Status DeploymentShaStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	gh "github.com/google/go-github/v31/github"
@@ -28,14 +29,16 @@ var (
 	transientEnvironment = true
 	autoMerge            = false
 	autoInactive         = false
-	environment          = "properator"
+	baseEnvironment      = "properator"
 	inactive             = "inactive"
+	inactiveStatus       = gh.DeploymentStatusRequest{
+		State: &inactive,
+	}
 )
 
 func createStatus(
 	ctx context.Context, ghCli *gh.Client, gd *deployv1alpha1.GithubDeployment, status *gh.DeploymentStatusRequest,
 ) error {
-	status.AutoInactive = &autoInactive
 	_, _, err := ghCli.Repositories.CreateDeploymentStatus(
 		ctx, gd.Spec.Owner, gd.Spec.Name, gd.Spec.ID, status,
 	)
@@ -44,27 +47,41 @@ func createStatus(
 }
 
 //ReconcileStatus handles telling Github about the status
-func ReconcileStatus(ctx context.Context, ghCli *gh.Client, githubDeployment *deployv1alpha1.GithubDeployment) error {
-	if githubDeployment.Status != githubDeployment.Spec.Status {
-		githubDeployment.Status = githubDeployment.Spec.Status
+func ReconcileStatus(
+	ctx context.Context, ghCli *gh.Client, inactivateID int64, gd *deployv1alpha1.GithubDeployment,
+) (bool, error) {
+	st := &gd.Status
+	sp := &gd.Spec
+
+	if sp.Statuses[sp.Sha] != st.Status {
+		st.Status = sp.Statuses[sp.Sha]
 		status := gh.DeploymentStatusRequest{
-			State: &githubDeployment.Spec.Status.State,
+			State: &st.Status.State,
 		}
 
-		if githubDeployment.Spec.Status.URL != "" {
-			status.EnvironmentURL = &githubDeployment.Spec.Status.URL
+		if st.Status.URL != "" {
+			status.EnvironmentURL = &st.Status.URL
 		}
 
+		if inactivateID != 0 {
+			_, _, err := ghCli.Repositories.CreateDeploymentStatus(
+				ctx, gd.Spec.Owner, gd.Spec.Name, inactivateID, &inactiveStatus,
+			)
+			if err != nil {
+				return false, fmt.Errorf("couldn't deactivate old status: %w", err)
+			}
+		}
 		// TODO retry on certain GH errors?
-		return createStatus(ctx, ghCli, githubDeployment, &status)
+		return true, createStatus(ctx, ghCli, gd, &status)
 	}
 
-	return nil
+	return false, nil
 }
 
 func (r *GithubDeploymentReconciler) createDeployment(
 	ctx context.Context, gd *deployv1alpha1.GithubDeployment,
-) (int64, error) {
+) (*gh.Deployment, error) {
+	environment := fmt.Sprintf("%s (%s)", baseEnvironment, gd.Spec.Ref)
 	depReq := gh.DeploymentRequest{
 		Ref:                  &gd.Spec.Ref,
 		Environment:          &environment,
@@ -74,10 +91,10 @@ func (r *GithubDeploymentReconciler) createDeployment(
 	dep, _, err := r.GhCli.Repositories.CreateDeployment(ctx, gd.Spec.Owner, gd.Spec.Name, &depReq)
 
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return dep.GetID(), nil
+	return dep, nil
 }
 
 const deactivateFinalizer string = "finalizers.deploy.properator.io/deactivate"
@@ -130,23 +147,29 @@ func (r *GithubDeploymentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, e
 
 	var err error
 
-	if gd.Spec.ID == 0 {
-		var id int64
-		id, err = r.createDeployment(ctx, &gd)
+	var inactivateID int64
+	if gd.Spec.ID == 0 || gd.Spec.Sha != gd.Status.Sha {
+		var dep *gh.Deployment
+		dep, err = r.createDeployment(ctx, &gd)
+		// Now handle potentially updated status, list of sha?
 
 		if err != nil {
 			log.Error(err, "unable to create deployment on github")
 		} else {
-			gd.Spec.ID = id
+			// Inactivate about the old ID
+			inactivateID = gd.Spec.ID
+			// If flux has updated, we have a successful new dep
+			// we always have an active one
+			gd.Spec.ID = dep.GetID()
+			gd.Spec.Sha = dep.GetSHA()
+			gd.Status.Sha = gd.Spec.Sha
 		}
 	}
 
+	var needsUpdate bool
+
 	if gd.ObjectMeta.DeletionTimestamp.IsZero() {
-		if ensureFinalizer(&gd) {
-			if err := r.Update(ctx, &gd); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
+		needsUpdate = ensureFinalizer(&gd)
 	} else {
 		if dropFinalizer(&gd) {
 			status := gh.DeploymentStatusRequest{
@@ -165,12 +188,17 @@ func (r *GithubDeploymentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, e
 		return ctrl.Result{}, nil
 	}
 
-	if err = ReconcileStatus(ctx, r.GhCli, &gd); err != nil {
+	statusUpdated, err := ReconcileStatus(ctx, r.GhCli, inactivateID, &gd)
+	if err != nil {
 		log.Error(err, "unable to update on github")
 	}
 
-	if err := r.Update(ctx, &gd); err != nil {
-		log.Error(err, "unable to update github deployment resource")
+	needsUpdate = needsUpdate || statusUpdated
+
+	if needsUpdate {
+		if err := r.Update(ctx, &gd); err != nil {
+			log.Error(err, "unable to update github deployment resource")
+		}
 	}
 
 	return ctrl.Result{}, err
