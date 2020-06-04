@@ -13,11 +13,11 @@ If we comment `@properator-bot deploy` on an existing PR, `properator` will laun
 an instance of Flux
 pointed to that PR's branch and create a GH deployment to track it.
 
-![Usage](docs/usage.png)
+<img src="docs/usage.png" width="600" alt="Usage">
 
 When the PR is closed, that instance of Flux and the launched manifests will disappear.
 
-![Drop](docs/closed.png)
+<img src="docs/closed.png" width="600" alt="Drop">
 
 ### URL annotations
 
