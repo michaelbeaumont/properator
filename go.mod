@@ -9,6 +9,8 @@ require (
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
+	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
+	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.4.0
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2

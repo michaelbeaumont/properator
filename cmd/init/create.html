@@ -1,0 +1,69 @@
+<html>
+  <head>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Raleway&display=swap");
+    </style>
+    <style>
+      * {
+        font-family: "Raleway", sans-serif;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      html {
+        padding-top: 20vh;
+      }
+      form {
+        width: 50vw;
+      }
+      input {
+        width: 30vw;
+        margin-bottom: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <form action="https://github.com/settings/apps/new" id="form" method="post">
+      <h1>Add properator to your GitHub account</h1>
+      <label for="name">Name: </label><br />
+      <input type="text" id="name" value="properator" /><br />
+      <label for="name">URL for receiving webhook events: </label><br />
+      <input
+        type="text"
+        id="webhook_url"
+        placeholder="Publicly accessible webhook URL"
+      /><br />
+      <input type="hidden" id="manifest" name="manifest" />
+      <input type="submit" value="Create GitHub app" />
+    </form>
+    <script type="application/javascript">
+      document.getElementById("form").addEventListener("submit", (e) => {
+        const name = document.getElementById("name").value;
+        const url = "https://michaelbeaumont.github.io/properator";
+        const webhook_url = document.getElementById("webhook_url").value;
+        const value = JSON.stringify({
+          default_events: ["issue_comment", "pull_request"],
+          default_permissions: {
+            metadata: "read",
+            members: "read",
+            deployments: "write",
+            issues: "write",
+            pull_requests: "write",
+            administration: "write", // deploy keys
+            single_file: "read",
+          },
+          single_file_name: "properator.yml",
+          hook_attributes: {
+            url: webhook_url,
+            active: true,
+          },
+          public: false,
+          redirect_url: new URL("/callback", window.location.origin).toString(),
+          url: url,
+          description: "PR operator",
+          name: name,
+        });
+        document.getElementById("manifest").value = value;
+      });
+    </script>
+  </body>
+</html>

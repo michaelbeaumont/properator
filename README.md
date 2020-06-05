@@ -3,8 +3,6 @@
 properator manages launching _in progress_ versions of your application using Flux,
 pull requests and the Github deployments API.
 
-Note: `properator` is only setup for local testing at the moment.
-
 ## Usage
 
 Assuming `properator` is setup to listen to your repository's webhook events
@@ -18,6 +16,12 @@ pointed to that PR's branch and create a GH deployment to track it.
 When the PR is closed, that instance of Flux and the launched manifests will disappear.
 
 <img src="docs/closed.png" width="600" alt="Drop">
+
+Note: As more commits are pushed, github will say the deployment is "outdated".
+This is a drawback of the deployments API; it doesn't let us update a
+deployment, we can only create new ones.
+Howeber, the deployment is not really forever out of date, Flux will apply the changes within 5
+minutes.
 
 ### URL annotations
 
@@ -37,7 +41,7 @@ to have the GH deployment point to `https://2.pr.app.test`.
 Note: `properator` gives you access to the PR number
 when manifests are generated on the file system at `/etc/properator`.
 
-As a primitive example, this means you can have a `.flux.yaml` like:
+As a primitive example, this means you can have a `.flux.yaml` and `Ingress` like:
 
 ```
 .flux.yaml
@@ -46,7 +50,9 @@ version: 1
 patchUpdated:
   generators:
   - command: sed -e "s/\${PR}/$(cat /etc/properator/pr)/g" ingress.yaml
+```
 
+```
 ingress.yaml
 ---
 apiVersion: extensions/v1beta1
@@ -60,38 +66,27 @@ metadata:
 
 ## Setup
 
-We're assuming `minikube` running locally.
+We'll cover initializing a Github App for `properator` and then launching it
+locally in `minikube`.
 
-### Deploy key
+Note: requires kubernetes 1.16.
 
-Setup a deploy key in your cluster that will be shared by `flux` instances to access the repository.
+### Initialization
 
-```
-kubectl create ns properator-system
-kubectl create secret generic -n properator-system flux-git-deploy --from-file=identity
-```
-
-where `identity` is a file containing a private SSH key. The public half should
-be added as a deploy key in Github for each repo setup with `properator`.
-
-### Github credentials
-
-The controller needs:
-
-- a token giving access to a github user account.
-- to listen to github webhook events and forward them to the
-  `properator-system/github-controller-manager` service.
-  Make note of the webhook secret.
-
-For testing, you can use `make listen-webhook` to use `smee.io` to proxy events
-from your local machine to your cluster.
-
-Put both of these secrets into the `.env` file in the root of the repo:
+`properator` is meant to be run as a GitHub app. To make setup easier, execute:
 
 ```
-GITHUB_TOKEN=<github_token>
-GITHUB_WEBHOOK_SECRET=<webhook_secret>
+go run ./cmd/init
 ```
+
+This will setup the app in your account (organizations not yet supported) and write
+the configuration and key to `.env`/`id_rsa`, which are later used to deploy `properator`.
+
+#### Webhook
+
+`properator` needs to listen to github webhook events. Visit
+[smee](https://smee.io/) to get a publicly accessible webhook URL.
+Enter this URL when initializing the app as above.
 
 ### Launch
 
@@ -109,14 +104,29 @@ Install the manifests to the cluster with:
 make deploy
 ```
 
+For `minikube` and testing, you can use `make listen-webhook` to use `smee.io`
+to proxy events from the URL you created earlier to your local machine.
+
+#### Deploy key
+
+Setup a deploy key in your cluster that will be shared by `flux` instances to access the repository.
+
+```
+kubectl create ns properator-system
+kubectl create secret generic -n properator-system flux-git-deploy --from-file=deploykey
+```
+
+where `identity` is a file containing a private SSH key. The public half should
+be added as a deploy key in Github for each repo setup with `properator`.
+
 ## TODO
 
 1. Add configuration to repositories
    - `--git-path` for `flux`
-1. How to measure "successful" deployment
+1. How to measure "successful" deployment?
    Right now it's just whether an `Ingress` resource appears with a link to the
    deployment.
    - If we're not using `Ingress`?
-   - Maybe have image for use in k8s `Job` which sets the deployment as active if
-     an ingress is _really_ responsive?
-1. Make deployment to cluster easier, github apps
+   - Check responsiveness of ingress/service and set the deployment when it's
+     ready
+1. Automate deploy key setup for flux
