@@ -26,6 +26,9 @@ spec:
         - name: git-key
           secret:
             secretName: flux-git-deploy
+        - name: github-secrets
+          secret:
+            secretName: github-secrets
       containers:
         - args:
             - --enable-leader-election
@@ -43,12 +46,9 @@ spec:
             - name: git-key
               readOnly: true
               mountPath: /etc/properator
-          env:
-          - name: GITHUB_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: github-secrets-manager
-                key: GITHUB_TOKEN
+            - name: github-secrets
+              readOnly: true
+              mountPath: /etc/secrets
       terminationGracePeriodSeconds: 10
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1

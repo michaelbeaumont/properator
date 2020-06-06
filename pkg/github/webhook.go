@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	"github.com/go-logr/logr"
 	gh "github.com/google/go-github/v31/github"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,33 +30,62 @@ func NewWebhook(key []byte, events chan interface{}) Webhook {
 	}
 }
 
-// WebhookWorker handles webhook events
+// WebhookWorker pulls webhook events off the chan
+// and gives them to a WebhookHandler
 type WebhookWorker struct {
+	k8s         client.Client
+	makeHandler func(installationID int64) (*WebhookHandler, error)
+	log         logr.Logger
+}
+
+// WebhookHandler handles a specific event
+type WebhookHandler struct {
 	k8s      client.Client
-	ghcli    *gh.Client
+	ghCli    *gh.Client
 	username string
 	log      logr.Logger
 }
 
 // NewWebhookWorker creates the state needed for a worker
-func NewWebhookWorker(k8s client.Client, ghcli *gh.Client, username string, log logr.Logger) WebhookWorker {
+func NewWebhookWorker(k8s client.Client, makeGhcli ClientForInstallation, username string, log logr.Logger) WebhookWorker {
+	makeHandler := func(installationID int64) (*WebhookHandler, error) {
+		ghcli, err := makeGhcli(installationID)
+		if err != nil {
+			return nil, err
+		}
+		return &WebhookHandler{k8s, ghcli, username, log}, nil
+	}
 	return WebhookWorker{
 		k8s,
-		ghcli,
-		username,
+		makeHandler,
 		log,
 	}
+}
+
+// HasInstallation covers all relevant webhook events
+type HasInstallation interface {
+	GetInstallation() *gh.Installation
 }
 
 // Worker handles github events from a channel
 func (webhook *WebhookWorker) Worker(wg *sync.WaitGroup, events <-chan interface{}) {
 	defer wg.Done()
 	for event := range events {
-		if action := webhook.handleEvent(event); action != nil {
+		hasInstallation, ok := event.(HasInstallation)
+		if !ok {
+			webhook.log.Error(errors.New("couldn't understand webhook event, no installation present"), "")
+			continue
+		}
+		installationID := hasInstallation.GetInstallation().GetID()
+		handler, err := webhook.makeHandler(installationID)
+		if err != nil {
+			webhook.log.Error(err, "couldn't initialize handler for installation %v", installationID)
+		}
+		if action := handler.handleEvent(event); action != nil {
 			if desc := action.Describe(); desc != "" {
 				webhook.log.Info(desc)
 			}
-			if err := action.Act(*webhook); err != nil {
+			if err := action.Act(handler); err != nil {
 				webhook.log.Error(err, "Error doing an action")
 			}
 		}
@@ -135,8 +166,7 @@ func parsePREvent(event *gh.PullRequestEvent) action {
 		return nil
 	}
 }
-
-func (webhook *WebhookWorker) handleEvent(event interface{}) action {
+func (webhook *WebhookHandler) handleEvent(event interface{}) action {
 	switch event := event.(type) {
 	case *gh.IssueCommentEvent:
 		return parseComment(webhook.username, event)

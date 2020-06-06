@@ -23,6 +23,7 @@ zz_generated.*
 *.swo
 *~
 
+id_rsa
 .env
 
 node_modules

@@ -41,9 +41,9 @@ uninstall: manifests
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 rawdeploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG} && kustomize edit set image github-webhook=${GH_IMG}
-	cp .env config/github-webhook && cp .env config/manager
+	cp .env id_rsa config/github-webhook && cp .env id_rsa config/manager
 	kustomize build config/default | kubectl apply -f -
-	rm config/{github-webhook,manager}/.env
+	rm config/{github-webhook,manager}/{.env,id_rsa}
 
 deploy: install rawdeploy
 	kubectl rollout restart -n properator-system deployment/properator-github-webhook

@@ -21,6 +21,15 @@ type GithubDeploymentReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	GhCli  ClientForOwnerRepo
+}
+
+// GithubDeploymentReconciliation is the environment for a specific
+// reconciliation.
+type GithubDeploymentReconciliation struct {
+	client.Client
+	Log    logr.Logger
+	Scheme *runtime.Scheme
 	GhCli  *gh.Client
 }
 
@@ -72,7 +81,7 @@ func ReconcileStatus(
 	return false, nil
 }
 
-func (r *GithubDeploymentReconciler) createDeployment(
+func (r *GithubDeploymentReconciliation) createDeployment(
 	ctx context.Context, gd *deployv1alpha1.GithubDeployment,
 ) (*gh.Deployment, error) {
 	environment := fmt.Sprintf("%s (%s)", baseEnvironment, gd.Spec.Ref)
@@ -128,7 +137,7 @@ func dropFinalizer(gd *deployv1alpha1.GithubDeployment) bool {
 	return false
 }
 
-func (r *GithubDeploymentReconciler) handleBeingDeleted(
+func (r *GithubDeploymentReconciliation) handleBeingDeleted(
 	ctx context.Context, gd *deployv1alpha1.GithubDeployment,
 ) (ctrl.Result, error) {
 	if dropFinalizer(gd) {
@@ -148,26 +157,16 @@ func (r *GithubDeploymentReconciler) handleBeingDeleted(
 	return ctrl.Result{}, nil
 }
 
-// Reconcile handles GithubDeployments.
-func (r *GithubDeploymentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
-	log := r.Log.WithValues("githubdeployment", req.NamespacedName)
-
-	var gd deployv1alpha1.GithubDeployment
-	if err := r.Get(ctx, req.NamespacedName, &gd); err != nil {
-		log.Error(err, "unable to fetch github deployments")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
-	var err error
-
+func (r *GithubDeploymentReconciliation) reconcileDeployment(
+	ctx context.Context, gd *deployv1alpha1.GithubDeployment,
+) (ctrl.Result, error) {
 	if gd.Spec.ID == 0 {
 		var dep *gh.Deployment
-		dep, err = r.createDeployment(ctx, &gd)
+		dep, err := r.createDeployment(ctx, gd)
 		// Now handle potentially updated status
 
 		if err != nil {
-			log.Error(err, "unable to create deployment on github")
+			r.Log.Error(err, "unable to create deployment on github")
 		} else {
 			// If flux has updated, we have a successful new dep
 			// we always have an active one
@@ -179,25 +178,45 @@ func (r *GithubDeploymentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, e
 	var needsUpdate bool
 
 	if !gd.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.handleBeingDeleted(ctx, &gd)
+		return r.handleBeingDeleted(ctx, gd)
 	}
 
-	needsUpdate = ensureFinalizer(&gd)
+	needsUpdate = ensureFinalizer(gd)
 
-	statusUpdated, err := ReconcileStatus(ctx, r.GhCli, &gd)
+	statusUpdated, err := ReconcileStatus(ctx, r.GhCli, gd)
 	if err != nil {
-		log.Error(err, "unable to update on github")
+		r.Log.Error(err, "unable to update on github")
 	}
 
 	needsUpdate = needsUpdate || statusUpdated
 
 	if needsUpdate {
-		if err := r.Update(ctx, &gd); err != nil {
-			log.Error(err, "unable to update github deployment resource")
+		if err := r.Update(ctx, gd); err != nil {
+			r.Log.Error(err, "unable to update github deployment resource")
 		}
 	}
 
 	return ctrl.Result{}, err
+}
+
+// Reconcile handles GithubDeployments.
+func (r *GithubDeploymentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	ctx := context.Background()
+	log := r.Log.WithValues("githubdeployment", req.NamespacedName)
+
+	var gd deployv1alpha1.GithubDeployment
+	if err := r.Get(ctx, req.NamespacedName, &gd); err != nil {
+		log.Error(err, "unable to fetch github deployments")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	ghCli, err := r.GhCli(ctx, gd.Spec.Owner, gd.Spec.Name)
+	if err != nil {
+		log.Error(err, "unable to create gh cli for the deployment")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	reconciliation := GithubDeploymentReconciliation{r.Client, r.Log, r.Scheme, ghCli}
+	return reconciliation.reconcileDeployment(ctx, &gd)
 }
 
 // SetupWithManager initializes our controller.

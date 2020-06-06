@@ -9,8 +9,3 @@ images:
 - name: github-webhook
   newName: github-webhook
   newTag: latest
-secretGenerator:
-- envs:
-  - .env
-  name: github-secrets-manager
-  type: Opaque

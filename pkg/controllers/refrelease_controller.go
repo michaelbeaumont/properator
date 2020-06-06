@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	gh "github.com/google/go-github/v31/github"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,7 +27,6 @@ type RefReleaseReconciler struct {
 	Scheme    *runtime.Scheme
 	GitKey    []byte
 	APIReader client.Reader
-	GhCli     *gh.Client
 }
 
 // Reconcile handles RefRelease

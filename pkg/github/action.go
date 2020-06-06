@@ -14,7 +14,7 @@ import (
 )
 
 type action interface {
-	Act(webhook WebhookWorker) error
+	Act(webhook *WebhookHandler) error
 	Describe() string
 }
 
@@ -34,7 +34,7 @@ type drop struct {
 type noopAction struct {
 }
 
-func (ca *noopAction) Act(webhook WebhookWorker) error {
+func (ca *noopAction) Act(webhook *WebhookHandler) error {
 	return nil
 }
 
@@ -56,9 +56,9 @@ var (
 
 const annotation = "deploy.properator.io/github-webhook"
 
-func (ca *create) Act(webhook WebhookWorker) error {
+func (ca *create) Act(webhook *WebhookHandler) error {
 	ctx := context.Background()
-	pr, _, err := webhook.ghcli.PullRequests.Get(ctx, ca.owner, ca.name, ca.pr.number)
+	pr, _, err := webhook.ghCli.PullRequests.Get(ctx, ca.owner, ca.name, ca.pr.number)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (ca *create) Describe() string {
 	return fmt.Sprintf("Creating PR %d from %d", ca.pr.number, ca.pr.id)
 }
 
-func (d *drop) Act(webhook WebhookWorker) error {
+func (d *drop) Act(webhook *WebhookHandler) error {
 	ctx := context.Background()
 	name, namespace := getNamespaced(d.pr)
 	ns := v1.Namespace{}

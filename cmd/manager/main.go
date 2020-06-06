@@ -6,8 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/google/go-github/v31/github"
-	"golang.org/x/oauth2"
+	"github.com/michaelbeaumont/properator/pkg/github"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -56,21 +55,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	token := os.Getenv("GITHUB_TOKEN")
-	if token == "" {
-		ctrl.Log.Error(err, "couldn't find GITHUB_TOKEN in environment")
+	setup, err := github.SetupGhCli(context.Background())
+	if err != nil {
+		ctrl.Log.Error(err, "failed to setup gh clients")
 		os.Exit(1)
 	}
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: token},
-	)
-	ctx := context.Background()
-	tc := oauth2.NewClient(ctx, ts)
-	ghCli := github.NewClient(tc)
-	key, err := ioutil.ReadFile("/etc/properator/identity")
 
+	key, err := ioutil.ReadFile("/etc/properator/identity")
 	if err != nil {
-		setupLog.Error(err, "unable to get key")
+		setupLog.Error(err, "unable to get deploy key")
 	}
 
 	if err = (&controllers.RefReleaseReconciler{
@@ -79,7 +72,6 @@ func main() {
 		Scheme:    mgr.GetScheme(),
 		GitKey:    key,
 		APIReader: mgr.GetAPIReader(),
-		GhCli:     ghCli,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RefRelease")
 		os.Exit(1)
@@ -93,6 +85,8 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Ingress")
 		os.Exit(1)
 	}
+
+	ghCli := controllers.ClientForOwnerRepoFromSetup(setup)
 
 	if err = (&controllers.GithubDeploymentReconciler{
 		Client: mgr.GetClient(),
