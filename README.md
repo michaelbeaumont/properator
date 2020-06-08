@@ -79,7 +79,7 @@ Note: requires kubernetes 1.16.
 go run ./cmd/init
 ```
 
-This will setup the app in your account (organizations not yet supported) and write
+This will setup the app in your account or organization and write
 the configuration and key to `.env`/`id_rsa`, which are later used to deploy `properator`.
 
 #### Webhook

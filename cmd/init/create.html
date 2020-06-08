@@ -24,22 +24,34 @@
   <body>
     <form action="https://github.com/settings/apps/new" id="form" method="post">
       <h1>Add properator to your GitHub account</h1>
-      <label for="name">Name: </label><br />
+      <label for="name">Name:</label><br />
       <input type="text" id="name" value="properator" /><br />
-      <label for="name">URL for receiving webhook events: </label><br />
+      <label for="name">Webhook URL:</label><br />
       <input
         type="text"
         id="webhook_url"
         placeholder="Publicly accessible webhook URL"
       /><br />
+      <label for="org">Organization to create the app in:</label><br />
+      <input
+        type="text"
+        id="org"
+        placeholder="Leave blank to create for user account"
+      /><br />
       <input type="hidden" id="manifest" name="manifest" />
       <input type="submit" value="Create GitHub app" />
     </form>
     <script type="application/javascript">
-      document.getElementById("form").addEventListener("submit", (e) => {
+      const form = document.getElementById("form");
+      form.addEventListener("submit", (e) => {
         const name = document.getElementById("name").value;
         const url = "https://michaelbeaumont.github.io/properator";
         const webhook_url = document.getElementById("webhook_url").value;
+        const org = document.getElementById("org").value;
+        if (org != "") {
+          form.action =
+            "https://github.com/organizations/" + org + "/settings/apps/new";
+        }
         const value = JSON.stringify({
           default_events: ["issue_comment", "pull_request"],
           default_permissions: {
