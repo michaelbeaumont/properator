@@ -1,7 +1,7 @@
-
+TAG ?= latest
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
-GH_IMG ?= github-webhook:latest
+IMG ?= michaelbeaumont/properator-controller:${TAG}
+GH_IMG ?= michaelbeaumont/properator-github-webhook:${TAG}
 # Produce CRDs that work only after 1.16
 CRD_OPTIONS ?= "crd:crdVersions=v1"
 
@@ -40,7 +40,8 @@ uninstall: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 rawdeploy: manifests
-	cd config/manager && kustomize edit set image controller=${IMG} && kustomize edit set image github-webhook=${GH_IMG}
+	cd config/manager && kustomize edit set image controller=${IMG}
+	cd config/github-webhook && kustomize edit set image github-webhook=${GH_IMG}
 	cp .env id_rsa config/github-webhook && cp .env id_rsa config/manager
 	kustomize build config/default | kubectl apply -f -
 	rm config/{github-webhook,manager}/{.env,id_rsa}
@@ -50,7 +51,9 @@ deploy: install rawdeploy
 	kubectl rollout restart -n properator-system deployment/properator-controller-manager
 
 undeploy: manifests
+	cp .env id_rsa config/github-webhook && cp .env id_rsa config/manager
 	kustomize build config/default | kubectl delete -f -
+	rm config/{github-webhook,manager}/{.env,id_rsa}
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
@@ -82,7 +85,7 @@ docker-build-github-webhook:
 # Push the docker image
 docker-push:
 	docker push ${IMG}
-	docker push ${GMIMG}
+	docker push ${GH_IMG}
 
 listen-github-webhook:
 	./hack/listen.sh

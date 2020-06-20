@@ -18,7 +18,6 @@ spec:
     spec:
       containers:
         - image: github-webhook:latest
-          imagePullPolicy: Never
           name: github-webhook
           ports:
             - name: http

@@ -4,8 +4,5 @@ resources:
 - manager.yaml
 images:
 - name: controller
-  newName: controller
-  newTag: latest
-- name: github-webhook
-  newName: github-webhook
+  newName: michaelbeaumont/properator-controller
   newTag: latest

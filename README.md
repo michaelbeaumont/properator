@@ -36,7 +36,7 @@ metadata:
 
 to have the GH deployment point to `https://2.pr.app.test`.
 
-#### Generation
+### Generation
 
 Note: `properator` gives you access to the PR number
 when manifests are generated on the file system at `/etc/properator`.
@@ -85,18 +85,10 @@ the configuration and key to `.env`/`id_rsa`, which are later used to deploy `pr
 #### Webhook
 
 `properator` needs to listen to github webhook events. Visit
-[smee](https://smee.io/) to get a publicly accessible webhook URL.
+[smee.io](https://smee.io/) to get a publicly accessible webhook URL.
 Enter this URL when initializing the app as above.
 
 ### Launch
-
-At the moment, the images needs to be built manually and they need to end up
-accessible by the cluster. For example, using `eval $(minikube docker-env)`,
-execute:
-
-```
-make docker-build
-```
 
 Install the manifests to the cluster with:
 
@@ -104,8 +96,36 @@ Install the manifests to the cluster with:
 make deploy
 ```
 
-For `minikube` and testing, you can use `make listen-webhook` to use `smee.io`
+At the moment, the images track the `latest` tag.
+
+#### Testing
+
+Using `minikube`, you can use `make listen-webhook` to use `smee.io`
 to proxy events from the URL you created earlier to your local machine.
+
+```
+$ WEBHOOK_URL=https://smee.io/code make listen-github-webhook
+./hack/listen.sh
+Forwarding from 127.0.0.1:8080 -> 8080
+npx: installed 40 in 4.406s
+Forwarding https://smee.io/code to http://localhost:8080/webhook
+Connected https://smee.io/code
+Handling connection for 8080
+POST http://localhost:8080/webhook - 200
+```
+
+#### Building
+
+The images can also be built manually but remember they need to end up
+accessible by the cluster.
+
+For example with `minikube`:
+
+```
+eval $(minikube docker-env)
+export TAG=dev # it's only important it's not latest so that the images aren't pulled
+make docker-build && make deploy
+```
 
 ## How it works
 
