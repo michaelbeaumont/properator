@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,21 +34,18 @@ func (r *RefReleaseReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	log := r.Log.WithValues("refrelease", req.NamespacedName)
 	var refRelease deployv1alpha1.RefRelease
 	if err := r.Get(ctx, req.NamespacedName, &refRelease); err != nil {
-		log.Error(err, "unable to fetch release")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, errors.Wrap(client.IgnoreNotFound(err), "unable to fetch release")
 	}
 
 	flux, err := FluxResources(ctx, r.APIReader, refRelease.ObjectMeta, refRelease.Spec)
 	if err != nil {
-		log.Error(err, "unable to generate flux resources")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, errors.Wrap(err, "unable to generate flux resources")
 	}
 	if err := flux.GiveOwnership(&refRelease, r.Scheme); err != nil {
-		log.Error(err, "unable to take ownership of flux")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, errors.Wrap(err, "unable to take ownership of flux")
 	}
 	if err := flux.Deploy(ctx, log, r, r.APIReader); err != nil {
-		log.Error(err, "unable to deploy flux")
+		return ctrl.Result{}, errors.Wrap(err, "unable to deploy flux")
 	}
 
 	return ctrl.Result{}, nil

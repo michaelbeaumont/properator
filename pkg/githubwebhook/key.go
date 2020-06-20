@@ -15,8 +15,8 @@ type RawKeyPair struct {
 	Private []byte
 }
 
-// GenerateKey creates an RSA keypair ready to write to disk.
-func GenerateKey() (RawKeyPair, error) {
+// generateKey creates an RSA keypair ready to write to disk.
+func generateKey() (RawKeyPair, error) {
 	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return RawKeyPair{}, err

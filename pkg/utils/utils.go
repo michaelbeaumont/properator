@@ -33,7 +33,7 @@ func CreateOrReplace(ctx context.Context, r client.Reader, c client.Client, obj 
 func GetCurrentNamespace() (string, error) {
 	data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "couldn't read namespace from server account")
 	}
 
 	return string(data), nil

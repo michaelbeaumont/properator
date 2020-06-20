@@ -17,7 +17,7 @@ const secretsPath = "/etc/secrets"
 // GetSecret gets a secret from the mounted volume.
 func GetSecret(k string) ([]byte, error) {
 	contents, err := ioutil.ReadFile(filepath.Join(secretsPath, k))
-	return contents, err
+	return contents, errors.Wrapf(err, "unable to get %s as mounted secret", k)
 }
 
 // ClientForInstallation creates a go-github client for a specific app
@@ -41,7 +41,7 @@ func SetupGhCli(ctx context.Context) (GhCliSetup, error) {
 
 	appID, err := strconv.ParseInt(string(rawAppID), 10, 0)
 	if err != nil {
-		return GhCliSetup{}, err
+		return GhCliSetup{}, errors.Wrap(err, "unable to parse APP_ID as int")
 	}
 
 	privateKey, err := GetSecret("id_rsa")
@@ -64,7 +64,7 @@ func SetupGhCli(ctx context.Context) (GhCliSetup, error) {
 	var makeGhCli ClientForInstallation = func(installationID int64) (*gh.Client, error) {
 		transport, err := ghinstallation.New(http.DefaultTransport, appID, installationID, privateKey)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "couldn't create client for installation")
 		}
 
 		return gh.NewClient(&http.Client{Transport: transport}), nil
