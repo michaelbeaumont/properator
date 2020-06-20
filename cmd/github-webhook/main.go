@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	deployv1alpha1 "github.com/michaelbeaumont/properator/api/v1alpha1"
-	"github.com/michaelbeaumont/properator/pkg/github"
+	"github.com/michaelbeaumont/properator/pkg/githubwebhook"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,20 +38,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	secret, err := github.GetSecret("WEBHOOK_SECRET")
+	secret, err := githubwebhook.GetSecret("WEBHOOK_SECRET")
 	if err != nil {
 		log.Error(err, "couldn't get webhook secret")
 		os.Exit(1)
 	}
 
-	setup, err := github.SetupGhCli(context.Background())
+	setup, err := githubwebhook.SetupGhCli(context.Background())
 	if err != nil {
 		log.Error(err, "failed to setup gh clients")
 		os.Exit(1)
 	}
 
 	events := make(chan interface{}, 200)
-	worker := github.NewWebhookWorker(k8s, setup.CliForInstall, setup.Username, log)
+	worker := githubwebhook.NewWebhookWorker(k8s, setup.CliForInstall, setup.Username, log)
 
 	var wg sync.WaitGroup
 
@@ -59,7 +59,7 @@ func main() {
 
 	go worker.Worker(&wg, events)
 
-	wh := github.NewWebhook(secret, events)
+	wh := githubwebhook.NewWebhook(secret, events)
 	Handler := http.NewServeMux()
 	Handler.Handle("/webhook", &wh)
 

@@ -1,4 +1,4 @@
-package github
+package githubwebhook
 
 import (
 	"testing"
@@ -13,8 +13,9 @@ var (
 )
 
 func TestContainsCommand(t *testing.T) {
-	assert.True(t, containsCommand("name", "deploy", "@name    deploy"))
-	assert.False(t, containsCommand("name", "deploy", "@name  f  deploy"))
+	assert.True(t, containsCommand("name", "@name    deploy", "deploy"))
+	assert.True(t, containsCommand("name", "@name    delete", "deploy", "delete"))
+	assert.False(t, containsCommand("name", "@name  f  deploy", "deploy"))
 }
 
 func TestParseComment(t *testing.T) {

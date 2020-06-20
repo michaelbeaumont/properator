@@ -18,8 +18,9 @@ type Ref struct {
 
 // Repo defines the Github repo
 type Repo struct {
-	Owner string `json:"owner,omitempty"`
-	Name  string `json:"name,omitempty"`
+	Owner         string `json:"owner,omitempty"`
+	Name          string `json:"name,omitempty"`
+	KeySecretName string `json:"keySecretName,omitempty"`
 }
 
 // RefReleaseSpec defines the desired state of RefRelease

@@ -1,9 +1,10 @@
-package github
+package githubwebhook
 
 import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -96,13 +97,13 @@ func (webhook *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	payload, err := gh.ValidatePayload(r, webhook.webhookSecretKey)
 
 	if err != nil {
-		http.Error(w, "", 400)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	event, err := gh.ParseWebHook(gh.WebHookType(r), payload)
 	if err != nil {
-		http.Error(w, "", 400)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -110,13 +111,14 @@ func (webhook *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case webhook.events <- event:
 		return
 	default:
-		http.Error(w, "", 503)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 }
 
-func containsCommand(name, command, body string) bool {
-	pat := fmt.Sprintf("@%s[[:space:]]+%s", name, command)
+func containsCommand(name, body, command string, otherCommands ...string) bool {
+	commands := append([]string{command}, otherCommands...)
+	pat := fmt.Sprintf("@%s[[:space:]]+(?:%s)", name, strings.Join(commands, "|"))
 	matched, _ := regexp.MatchString(pat, body)
 	return matched
 }
@@ -131,14 +133,14 @@ func parseComment(username string, comment *gh.IssueCommentEvent) action {
 	}
 	body := comment.Comment.GetBody()
 
-	if containsCommand(username, "deploy", body) {
+	if containsCommand(username, body, "deploy") {
 		return &create{
 			owner: comment.GetRepo().GetOwner().GetLogin(),
 			name:  comment.GetRepo().GetName(),
 			pr:    pr,
 		}
 	}
-	if containsCommand(username, "drop", body) {
+	if containsCommand(username, body, "drop", "delete") {
 		return &drop{
 			pr: pr,
 		}

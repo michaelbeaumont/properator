@@ -1,27 +1,27 @@
 # properator
 
-properator manages launching _in progress_ versions of your application using Flux,
+properator manages launching _in progress_ versions of your application using [`flux`](https://github.com/fluxcd/flux),
 pull requests and the Github deployments API.
 
 ## Usage
 
-Assuming `properator` is setup to listen to your repository's webhook events
-(see below) and running as `@properator-bot`.
-If we comment `@properator-bot deploy` on an existing PR, `properator` will launch
-an instance of Flux
+We'll assume `properator` is [setup as a Github app](#setup) and running as `@properator-bot`.
+Comments are used to control `properator`.
+For example, `@properator-bot deploy` on a PR, will launch an instance of `flux`
 pointed to that PR's branch and create a GH deployment to track it.
 
 <img src="docs/usage.png" width="600" alt="Usage">
 
-When the PR is closed, that instance of Flux and the launched manifests will disappear.
+When the PR is closed, that instance of `flux` and the launched manifests will be
+removed.
 
 <img src="docs/closed.png" width="600" alt="Drop">
 
 Note: As more commits are pushed, github will say the deployment is "outdated".
-This is a drawback of the deployments API; it doesn't let us update a
-deployment, we can only create new ones.
-Howeber, the deployment is not really forever out of date, Flux will apply the changes within 5
-minutes.
+This is a drawback of the deployments API; it doesn't let us update the commit
+for a deployment, we can only create new ones.
+However, the deployed version of the app really does track the PR branch because
+`flux` is now watching that branch and will apply any changes.
 
 ### URL annotations
 
@@ -41,20 +41,11 @@ to have the GH deployment point to `https://2.pr.app.test`.
 Note: `properator` gives you access to the PR number
 when manifests are generated on the file system at `/etc/properator`.
 
-As a primitive example, this means you can have a `.flux.yaml` and `Ingress` like:
+As a primitive example:
+
+###### ingress.yaml
 
 ```
-.flux.yaml
----
-version: 1
-patchUpdated:
-  generators:
-  - command: sed -e "s/\${PR}/$(cat /etc/properator/pr)/g" ingress.yaml
-```
-
-```
-ingress.yaml
----
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
@@ -62,6 +53,15 @@ metadata:
   annotations:
     deploy.properator.io/deployment: github-webhook
     deploy.properator.io/url: http://${PR}.pr.app.test
+```
+
+###### .flux.yaml
+
+```
+version: 1
+patchUpdated:
+  generators:
+  - command: sed -e "s/\${PR}/$(cat /etc/properator/pr)/g" ingress.yaml
 ```
 
 ## Setup
@@ -107,26 +107,24 @@ make deploy
 For `minikube` and testing, you can use `make listen-webhook` to use `smee.io`
 to proxy events from the URL you created earlier to your local machine.
 
-#### Deploy key
+## How it works
 
-Setup a deploy key in your cluster that will be shared by `flux` instances to access the repository.
+See below for some information about how properator functions internally.
 
-```
-kubectl create ns properator-system
-kubectl create secret generic -n properator-system flux-git-deploy --from-file=deploykey
-```
+### Deploy keys
 
-where `identity` is a file containing a private SSH key. The public half should
-be added as a deploy key in Github for each repo setup with `properator`.
+For every repo, `properator` will create an SSH key and add it to the
+repository. Every instance of `flux` started by `properator` will use this same key
+to synchronize with that repo.
 
 ## TODO
 
 1. Add configuration to repositories
    - `--git-path` for `flux`
+   - registry scanning
 1. How to measure "successful" deployment?
    Right now it's just whether an `Ingress` resource appears with a link to the
    deployment.
    - If we're not using `Ingress`?
    - Check responsiveness of ingress/service and set the deployment when it's
      ready
-1. Automate deploy key setup for flux

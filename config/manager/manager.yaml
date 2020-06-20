@@ -23,9 +23,6 @@ spec:
         control-plane: controller-manager
     spec:
       volumes:
-        - name: git-key
-          secret:
-            secretName: flux-git-deploy
         - name: github-secrets
           secret:
             secretName: github-secrets
@@ -43,9 +40,6 @@ spec:
               cpu: 100m
               memory: 20Mi
           volumeMounts:
-            - name: git-key
-              readOnly: true
-              mountPath: /etc/properator
             - name: github-secrets
               readOnly: true
               mountPath: /etc/secrets

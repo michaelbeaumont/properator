@@ -6,12 +6,14 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,7 +22,11 @@ import (
 	"github.com/michaelbeaumont/properator/pkg/utils"
 )
 
-// Flux holds all k8s resources needed for flux
+const (
+	fluxDeployKeyName = "properator-git-deploy-key"
+)
+
+// Flux holds all k8s resources needed for flux.
 type Flux struct {
 	deployment     appsv1.Deployment
 	configMap      v1.ConfigMap
@@ -38,7 +44,7 @@ func (f *Flux) toObjectList() []object {
 	return []object{&f.deployment, &f.configMap, &f.secret, &f.serviceAccount, &f.roleBinding}
 }
 
-// GiveOwnership sets controller references for Flux resources
+// GiveOwnership sets controller references for Flux resources.
 func (f *Flux) GiveOwnership(owner metav1.Object, scheme *runtime.Scheme) error {
 	for _, obj := range f.toObjectList() {
 		if err := ctrl.SetControllerReference(owner, obj, scheme); err != nil {
@@ -49,7 +55,7 @@ func (f *Flux) GiveOwnership(owner metav1.Object, scheme *runtime.Scheme) error 
 	return nil
 }
 
-// Deploy deploys this Flux instance to the cluster
+// Deploy deploys this Flux instance to the cluster.
 func (f *Flux) Deploy(ctx context.Context, log logr.Logger, c client.Client, r client.Reader) error {
 	for _, obj := range f.toObjectList() {
 		if err := utils.CreateOrReplace(ctx, r, c, obj); err != nil {
@@ -62,17 +68,14 @@ func (f *Flux) Deploy(ctx context.Context, log logr.Logger, c client.Client, r c
 
 // Resource creation
 
-// FluxResources creates the k8s resources needed to launch flux
-func FluxResources(meta metav1.ObjectMeta, repo string, ref deployv1alpha1.Ref, gitKey []byte) Flux {
-	secret := v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-git-deploy-key", meta.Name), Namespace: meta.Namespace,
-		},
-		Data: map[string][]byte{
-			"identity": gitKey,
-		},
-		Type: v1.SecretTypeOpaque,
-	}
+// FluxResources creates the k8s resources needed to launch flux.
+func FluxResources(
+	ctx context.Context, r client.Reader, meta metav1.ObjectMeta, spec deployv1alpha1.RefReleaseSpec,
+) (Flux, error) {
+	repo := spec.Repo
+	ref := spec.Ref
+	fullName := fmt.Sprintf("%s/%s", repo.Owner, repo.Name)
+	repoURL := fmt.Sprintf("git@github.com:%[1]s", fullName)
 
 	var refStr string
 	if ref.Branch != "" {
@@ -96,8 +99,13 @@ func FluxResources(meta metav1.ObjectMeta, repo string, ref deployv1alpha1.Ref, 
 		},
 		Data: data,
 	}
-	deployment := fluxDeployment(meta, repo, ref.Branch)
+	deployment := fluxDeployment(meta, repoURL, ref.Branch)
 	sa, rb := fluxRbac(meta)
+
+	secret, err := fluxSecret(ctx, r, repo.KeySecretName, meta.Namespace)
+	if err != nil {
+		return Flux{}, errors.Wrap(err, "couldn't create flux secret")
+	}
 
 	return Flux{
 		deployment,
@@ -105,10 +113,36 @@ func FluxResources(meta metav1.ObjectMeta, repo string, ref deployv1alpha1.Ref, 
 		secret,
 		sa,
 		rb,
+	}, nil
+}
+
+func fluxSecret(
+	ctx context.Context, r client.Reader, keySecretName string, refNamespace string,
+) (v1.Secret, error) {
+	namespace, err := utils.GetCurrentNamespace()
+	if err != nil {
+		return v1.Secret{}, err
 	}
+
+	nn := types.NamespacedName{Name: keySecretName, Namespace: namespace}
+
+	var commonSecret v1.Secret
+	if err := r.Get(ctx, nn, &commonSecret); err != nil {
+		return v1.Secret{}, err
+	}
+
+	return v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fluxDeployKeyName, Namespace: refNamespace,
+		},
+		Data: commonSecret.Data,
+		Type: commonSecret.Type,
+	}, nil
 }
 
 func fluxContainer(namespace, repo, ref string) v1.Container {
+	var port, probeSeconds int32 = 3030, 5
+
 	return v1.Container{
 		Name:  "flux",
 		Image: "docker.io/fluxcd/flux:1.19.0",
@@ -120,28 +154,28 @@ func fluxContainer(namespace, repo, ref string) v1.Container {
 		},
 		Ports: []v1.ContainerPort{
 			{
-				ContainerPort: 3030,
+				ContainerPort: port,
 			},
 		},
 		LivenessProbe: &v1.Probe{
 			Handler: v1.Handler{
 				HTTPGet: &v1.HTTPGetAction{
-					Port: intstr.FromInt(3030),
+					Port: intstr.FromInt(int(port)),
 					Path: "/api/flux/v6/identity.pub",
 				},
 			},
-			InitialDelaySeconds: 5,
-			TimeoutSeconds:      5,
+			InitialDelaySeconds: probeSeconds,
+			TimeoutSeconds:      probeSeconds,
 		},
 		ReadinessProbe: &v1.Probe{
 			Handler: v1.Handler{
 				HTTPGet: &v1.HTTPGetAction{
-					Port: intstr.FromInt(3030),
+					Port: intstr.FromInt(int(port)),
 					Path: "/api/flux/v6/identity.pub",
 				},
 			},
-			InitialDelaySeconds: 5,
-			TimeoutSeconds:      5,
+			InitialDelaySeconds: probeSeconds,
+			TimeoutSeconds:      probeSeconds,
 		},
 		VolumeMounts: []v1.VolumeMount{
 			{
@@ -160,7 +194,7 @@ func fluxContainer(namespace, repo, ref string) v1.Container {
 			"--git-label=flux",
 			"--git-readonly",
 			"--sync-garbage-collection",
-			"--k8s-secret-name=github-webhook-git-deploy-key",
+			fmt.Sprintf("--k8s-secret-name=%s", fluxDeployKeyName),
 			"--registry-disable-scanning",
 			fmt.Sprintf("--k8s-default-namespace=%s", namespace),
 			"--manifest-generation=true",
@@ -168,8 +202,8 @@ func fluxContainer(namespace, repo, ref string) v1.Container {
 	}
 }
 
-func fluxDeployment(meta metav1.ObjectMeta, repo string, ref string) appsv1.Deployment {
-	keyMode := int32(0400)
+func fluxDeployment(meta metav1.ObjectMeta, repo, ref string) appsv1.Deployment {
+	var keyFileMode int32 = 0400
 
 	return appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -201,8 +235,8 @@ func fluxDeployment(meta metav1.ObjectMeta, repo string, ref string) appsv1.Depl
 							Name: "git-key",
 							VolumeSource: v1.VolumeSource{
 								Secret: &v1.SecretVolumeSource{
-									SecretName:  "github-webhook-git-deploy-key",
-									DefaultMode: &keyMode,
+									SecretName:  fluxDeployKeyName,
+									DefaultMode: &keyFileMode,
 								},
 							},
 						},

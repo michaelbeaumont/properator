@@ -1,16 +1,19 @@
-package github
+package githubwebhook
 
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	gh "github.com/google/go-github/v31/github"
 	deployv1alpha1 "github.com/michaelbeaumont/properator/api/v1alpha1"
 	"github.com/michaelbeaumont/properator/pkg/utils"
+	"github.com/pkg/errors"
 )
 
 type action interface {
@@ -48,13 +51,51 @@ func getNamespaced(pr prPointer) (string, string) {
 
 var (
 	transientEnvironment = true
+	readOnlyKey          = true
 	autoMerge            = false
-	environment          = "properator"
+	properator           = "properator"
 	success              = "success"
 	inactive             = "inactive"
 )
 
 const annotation = "deploy.properator.io/github-webhook"
+
+func (ca *create) ensureGitKeySecret(ctx context.Context, webhook *WebhookHandler) (secretName string, err error) {
+	name := fmt.Sprintf("properator-git-deploy-key-%v", ca.pr.id)
+	currentNs, err := utils.GetCurrentNamespace()
+	if err != nil {
+		return "", err
+	}
+	secretNN := types.NamespacedName{Name: name, Namespace: currentNs}
+	if err := webhook.k8s.Get(ctx, secretNN, &v1.Secret{}); err != nil {
+		keyPair, err := GenerateKey()
+		if err != nil {
+			return "", err
+		}
+		keySecret := v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: currentNs,
+			},
+			Data: map[string][]byte{
+				"identity": keyPair.Private,
+			},
+			Type: v1.SecretTypeOpaque,
+		}
+		if err := webhook.k8s.Create(ctx, &keySecret); err != nil {
+			return "", err
+		}
+		pubKey := string(keyPair.Public)
+		ghKey := gh.Key{Title: &properator, Key: &pubKey, ReadOnly: &readOnlyKey}
+		_, resp, err := webhook.ghCli.Repositories.CreateKey(ctx, ca.owner, ca.name, &ghKey)
+		if err != nil {
+			return "", nil
+		}
+		if resp.StatusCode != http.StatusCreated {
+			return "", errors.Errorf("Unable to create deploy key for repository %s/%s", ca.owner, ca.name)
+		}
+	}
+	return name, nil
+}
 
 func (ca *create) Act(webhook *WebhookHandler) error {
 	ctx := context.Background()
@@ -78,12 +119,17 @@ func (ca *create) Act(webhook *WebhookHandler) error {
 			return err
 		}
 	}
+	keySecretName, err := ca.ensureGitKeySecret(ctx, webhook)
+	if err != nil {
+		return err
+	}
 	refRelease := deployv1alpha1.RefRelease{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 		Spec: deployv1alpha1.RefReleaseSpec{
 			Repo: deployv1alpha1.Repo{
-				Owner: ca.owner,
-				Name:  ca.name,
+				Owner:         ca.owner,
+				Name:          ca.name,
+				KeySecretName: keySecretName,
 			},
 			Ref: deployv1alpha1.Ref{
 				Sha:         pr.GetHead().GetSHA(),

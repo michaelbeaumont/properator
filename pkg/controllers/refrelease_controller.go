@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,7 +24,6 @@ type RefReleaseReconciler struct {
 	client.Client
 	Log       logr.Logger
 	Scheme    *runtime.Scheme
-	GitKey    []byte
 	APIReader client.Reader
 }
 
@@ -39,13 +37,14 @@ func (r *RefReleaseReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	repo := refRelease.Spec.Repo
-
-	fullName := fmt.Sprintf("%s/%s", repo.Owner, repo.Name)
-	repoURL := fmt.Sprintf("git@github.com:%[1]s", fullName)
-	flux := FluxResources(refRelease.ObjectMeta, repoURL, refRelease.Spec.Ref, r.GitKey)
+	flux, err := FluxResources(ctx, r.APIReader, refRelease.ObjectMeta, refRelease.Spec)
+	if err != nil {
+		log.Error(err, "unable to generate flux resources")
+		return ctrl.Result{}, nil
+	}
 	if err := flux.GiveOwnership(&refRelease, r.Scheme); err != nil {
 		log.Error(err, "unable to take ownership of flux")
+		return ctrl.Result{}, nil
 	}
 	if err := flux.Deploy(ctx, log, r, r.APIReader); err != nil {
 		log.Error(err, "unable to deploy flux")

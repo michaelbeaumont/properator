@@ -3,10 +3,9 @@ package main
 import (
 	"context"
 	"flag"
-	"io/ioutil"
 	"os"
 
-	"github.com/michaelbeaumont/properator/pkg/github"
+	"github.com/michaelbeaumont/properator/pkg/githubwebhook"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -55,22 +54,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	setup, err := github.SetupGhCli(context.Background())
+	setup, err := githubwebhook.SetupGhCli(context.Background())
 	if err != nil {
 		ctrl.Log.Error(err, "failed to setup gh clients")
 		os.Exit(1)
-	}
-
-	key, err := ioutil.ReadFile("/etc/properator/identity")
-	if err != nil {
-		setupLog.Error(err, "unable to get deploy key")
 	}
 
 	if err = (&controllers.RefReleaseReconciler{
 		Client:    mgr.GetClient(),
 		Log:       ctrl.Log.WithName("controllers").WithName("RefRelease"),
 		Scheme:    mgr.GetScheme(),
-		GitKey:    key,
 		APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RefRelease")

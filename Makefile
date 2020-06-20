@@ -56,7 +56,7 @@ undeploy: manifests
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./api/..." output:crd:artifacts:config=config/crd/bases
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager paths="./pkg/controllers/..." output:crd:artifacts:config=config/crd/bases output:rbac:artifacts:config=config/rbac
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=github-webhook paths="./pkg/github/..." output:crd:artifacts:config=config/crd/bases output:rbac:artifacts:config=config/rbac/github-webhook
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=github-webhook paths="./pkg/githubwebhook/..." output:crd:artifacts:config=config/crd/bases output:rbac:artifacts:config=config/rbac/github-webhook
 
 # Run go fmt against code
 fmt:
